@@ -1,98 +1,22 @@
-# Casting Call
+# Figure Creation Agent
 
-A companion tool to Vanessa Conzon & Allie Feldberg's working paper on AI, gender, and "doing gender" in organizations. It walks you through assessing how an existing AI product gets gendered (Path A) or designing one deliberately (Path B), and ships a full methodology page covering where each of its claims comes from.
+A thinking-and-drawing partner for turning an emerging qualitative research idea into a conceptual figure.
 
-## Which file is which
+**Use the live tool here: https://gendairesearch.com/figure-agent/**
 
-| File | What it is |
-|---|---|
-| `index.html` | **The build. Start here.** 2,935 lines, ~179 KB. Keeps the live web search. |
-| `old/index.html` | An **earlier, much smaller build** (1,394 lines, ~68 KB). Predates the methodology page, the per-field auto-classification, the source-link verification, and the disclosure-page additions. Retired, kept for comparison. Nothing should be edited here. |
+## What it does
 
-**This file used to be called `casting-call.html`.** It was renamed so that GitHub Pages serves the current build: Pages serves `index.html` from the repo root, and that slot was occupied by the old build, so <https://vanecon.github.io/casting-call/> was quietly serving a version from before the methodology page and the source-link verification existed. Both builds carry the same `<title>`, so there was nothing on the page to tell you which one you had.
+Two AI partners share one conversation and one diagram:
 
-There is now exactly one build in this repo. If you have a local clone or an open branch that still has `casting-call.html`, that is the same file under its old name.
+- **Thea**, a thinking partner, presses on your outcome, its explanatory factors, and what each arrow claims, until the relationships are specific enough to draw.
+- **Drew**, a drawing partner, turns the result into a figure you can revise through conversation, and exports it as SVG, PNG, or PowerPoint.
 
-See `CHANGELOG.md` for what changed in the current build and why.
+The analytical, thinking-partner work is deliberately assigned to the female-coded persona, and both roles hold steady when users try to redirect them.
 
-## What "the code" is
+## How it runs
 
-`index.html` is the whole thing. One file, with the CSS and JavaScript embedded in it. There is no separate source, no build step, no framework, no package manager, and no dependencies to install. Nothing is fetched from a CDN — no external scripts or stylesheets at all. The only outbound references are citation URLs and three calls to Anthropic's API.
+The tool is a single page (`index.html`). Thea and Drew reach Claude through the website's server, which holds the API key and sets the model (Claude Sonnet 4.6), temperature (0), and reply-length limits. For security and cost reasons, the server only accepts requests from the website, so the copy in this repository shows the full code but works only at the link above.
 
-So there isn't a hidden layer of "code Claude used to make the agent" sitting somewhere else. The file *is* the artifact. Open it in a browser and it runs.
+## Data
 
-## Rebuilding it in your own Claude account
-
-1. Start a new chat in your Claude account.
-2. **Upload `index.html` as an attachment** rather than pasting it. At roughly 45,000 tokens, pasting eats a large share of the context window before you've asked for anything.
-3. Ask Claude to open it as an artifact. It will render, and you can edit from there in conversation.
-4. When you're done, download the updated file and commit it.
-
-Note that an artifact published through Claude Code cannot reach `api.anthropic.com` directly — it has to go through the artifact runtime's `sample` capability instead, which has no web search. That variant is a separate file and is not in this repo; this repo holds the build that keeps real web search.
-
-## Editing notes
-
-**Ask for targeted edits, not rewrites.** With a single file this size, "rewrite it with X changed" invites silent regressions in parts nobody was looking at. Naming the section to change keeps the diff small and reviewable.
-
-**Check the diff before committing.** `git diff` on a single HTML file is readable and is the fastest way to catch an edit that touched more than intended.
-
-**Useful landmarks.** The `<style>` block holds all the design tokens as CSS variables at the top, so colors and type can be changed in one place. The coding logic lives in a handful of small functions: `tallyMarkers`, `placementFromTally`, `computeScore`, `behaviorCoding`, `alignmentLabel`, and `pathwayFor`. Changing how a signal is scored means changing those, and the scoring explanation in the methodology page should be updated to match — they're currently consistent and it would be easy to let them drift.
-
-**Badge labels are separate from badge logic.** `PATHWAY_INFO[...].tag` is the internal key — it sets the CSS class and is what the `info.tag === 'amplify'` comparisons test. `tagLabel` is what the user actually reads. Change the label; leave the key alone.
-
-## How this runs: as a claude.ai artifact (decided)
-
-Three features call `https://api.anthropic.com/v1/messages`:
-
-- `runSearch` — the "Have Claude look it up" search in Path A, Option A. Declares the `web_search_20250305` server tool.
-- `classifyField` — the per-field "Claude judges how this reads" helper in the manual coding sheet, and in the design studio for the job and the name. No web search; a small text-only call.
-- `proposeAvatar` — the design studio's avatar proposal (Path B). No web search; a small text-only call.
-
-**None of these calls carries an API key** — and none sends `anthropic-version` or `anthropic-dangerous-direct-browser-access` either. All they send is `Content-Type: application/json`.
-
-That is the whole story in one line. A real browser call to Anthropic needs all three of those headers; a request shaped like this one cannot succeed anywhere that forwards it as written. It works only where something **intercepts** the call to that hostname and rewrites it — supplying credentials, the version header, and the CORS bypass. The claude.ai artifact sandbox does exactly that.
-
-**So this file is meant to be run as a claude.ai artifact, and that is the decision.** Upload `index.html` to a Claude chat and ask Claude to open it as an artifact. All the Claude-powered features work there, including real web search.
-
-Two consequences of that decision:
-
-- **Every user must be signed in to Claude**, or the Claude-backed features fail. The disclosure page says so in its first line.
-- **A public URL and the sandbox are the same slot — you cannot have both.** Hosting the file on GitHub Pages or any domain is precisely what turns the interception off. That is not a bug to fix later; it is what hosting means here.
-
-The GitHub Pages copy of this repo therefore serves as a *preview* of the current build in manual mode, not as the working tool.
-
-| Where it runs | Manual coding | Claude-powered search, auto-classify & avatar proposal |
-|---|---|---|
-| **Artifact inside claude.ai** — the intended home | Works | Works |
-| Artifact published through Claude Code | Works | **Fails** — CSP blocks the host; that route needs `claude.use('sample')`, which has no web search |
-| GitHub Pages or any static host | Works | **Fails** |
-| Opened as a local file | Works | **Fails** |
-
-Everything a user types in by hand — the full coding sheet, the scoring, the placement, the design studio's dropdowns, the methodology page — is pure client-side JavaScript and works anywhere. Only the API-backed features depend on the sandbox (in the design studio, Claude's readings of the job and the name and its avatar proposal; the dropdowns still work by hand without them).
-
-Should a public URL with working search ever be wanted, it needs your own API key behind a small server-side proxy, with the three `fetch` URLs repointed at that proxy. **Never put a key in this file**: it is client-side, so the key would be visible to anyone who views source, and committing it to a public repo would leak it. No proxy is needed for the decision above — the repo copy simply degrades to manual mode, which is intended.
-
-## How source links behave
-
-Search mode used to show whatever URLs the model wrote into its JSON. Those are prose the model generates, so some were reconstructed from memory and 404'd (`ncwit.org/resource/btn/` was one; the real page is `ncwit.org/resource/thefacts/`).
-
-The current build harvests the URLs the web search *actually returned* — from `web_search_tool_result` blocks and text-block citations — and only links a source if its URL matches one of those, compared after normalisation. A source whose URL isn't in that set keeps its title as plain text and loses its link.
-
-Consequence worth knowing: **in any environment where the search can't run, every source link degrades to plain text.** That is deliberate. The allowlist is empty, so nothing can be vouched for, and the tool shows titles rather than links it can't stand behind.
-
-## Known rough edges
-
-- The search declares `web_search_20250305` and uses `claude-sonnet-4-6`. That model also supports the newer `web_search_20260209` variant, which adds dynamic filtering. Left as-is so far — a deliberate upgrade, not drift, when someone wants it.
-- Per-field source links (`designer_source`, `org_diversity_source`, `adaptive_source`) are verified against the same allowlist, but they aren't deduplicated against the "Pulled from" list, so one article can appear in both places.
-- Query parameters aren't sorted during URL normalisation, so the same article with params in a different order won't collapse. Rare for article URLs.
-
-## Avoiding divergence
-
-Three people editing a single 2,900-line file in three different Claude accounts will produce conflicting versions quickly, and this file has no module boundaries to merge along. Worth agreeing up front that this repo is the source of truth, that each round of edits starts from a fresh pull, and that changes go back as commits rather than as re-uploaded whole files.
-
-The `index.html` / `casting-call.html` split in this repo was that problem already happening once. It is resolved: there is one build, at `index.html`, and the retired one is parked under `old/` where it cannot be mistaken for current.
-
-## Contact
-
-- Vanessa Conzon, Boston College — conzon@bc.edu
-- Allie Feldberg, Harvard Business School — afeldberg@hbs.edu
+Information you enter (e.g., your responses, conversations, and the figures produced) may be saved. What you enter is processed by Anthropic's Claude.
