@@ -1732,7 +1732,7 @@
      IT: the endpoint below is the only value to set, nothing else.
      The server sets the model (Claude Sonnet 4.6) and temperature (0).
      ============================================================ */
-  const CLAUDE_ENDPOINT = '/api/claude/casting-call';
+  const CLAUDE_ENDPOINT = 'https://gendairesearch.com/api/claude/casting-call';
   /* ======================= end of IT block ======================= */
 
   // Until the endpoint is filled in, nothing is sent and the page says it
@@ -1758,6 +1758,15 @@
   let claudeQueue = Promise.resolve();
 
   // kind: 'busy' (429), 'network' (no answer at all), 'not_connected', or 'http' (any other error status)
+  // The site's daily spending cap (503, error type daily_limit_reached): its
+  // reply carries the sentence to show ("...Please try again tomorrow.").
+  async function dailyLimitMessage(response){
+    try {
+      const j = await response.clone().json();
+      return (j && j.error && j.error.type === 'daily_limit_reached' && j.error.message) ? String(j.error.message) : '';
+    } catch (e) { return ''; }
+  }
+
   function claudeCallError(kind, status){
     const e = new Error(kind === 'busy' ? 'Claude is busy (429)'
       : kind === 'network' ? 'couldn’t reach Claude'
@@ -1810,7 +1819,11 @@
         throw claudeCallError('busy', 429);
       }
     }
-    if (!response.ok) throw claudeCallError('http', response.status);
+    if (!response.ok) {
+      const daily = response.status === 503 ? await dailyLimitMessage(response) : '';
+      if (daily) { const e = claudeCallError('daily', 503); e.message = daily; throw e; }
+      throw claudeCallError('http', response.status);
+    }
     return response.json();
   }
 
@@ -1858,6 +1871,7 @@
     const kind = err && err.kind;
     if (kind === 'busy') return 'Claude is busy right now. Wait a minute, then click into the box and out again, or set this yourself.';
     if (kind === 'network') return 'Couldn’t reach Claude. Check your connection, then click into the box and out again, or set this yourself.';
+    if (kind === 'daily') return err.message + ' Until then, set this yourself.';
     return "Couldn't auto-classify — set this yourself.";
   }
 
@@ -2376,7 +2390,8 @@
       if (mine !== designState.seq) { return; }
       const kind = e && e.kind;
       setReasonState(note, 'error',
-        kind === 'busy' ? 'Claude is busy right now \u2014 wait a minute, then press Try again.'
+        kind === 'daily' ? e.message + ' Until then, choose the avatar\u2019s reading yourself.'
+        : kind === 'busy' ? 'Claude is busy right now \u2014 wait a minute, then press Try again.'
         : kind === 'network' ? 'Couldn\u2019t reach Claude. Check your connection, then press Try again.'
         : "Couldn't propose an avatar \u2014 choose the avatar's reading yourself.");
       btn.textContent = 'Try again'; btn.hidden = false;
@@ -2520,7 +2535,17 @@
         })
       });
 
-      if (!response.ok) throw new Error('Request failed (' + response.status + ')');
+      if (!response.ok) {
+        const daily = response.status === 503 ? await dailyLimitMessage(response) : '';
+        if (daily) {
+          statusEl.className = 'search-status';
+          statusEl.textContent = '';
+          setMode('manual');
+          showSearchFailureNote({ text: daily + ' Until then, you can fill in the sheet below by hand.', detail: '' });
+          return;
+        }
+        throw new Error('Request failed (' + response.status + ')');
+      }
       const data = await response.json();
       const wasTruncated = data.stop_reason === 'max_tokens';
 
